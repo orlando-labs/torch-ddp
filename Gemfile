@@ -5,4 +5,4 @@ gemspec
 gem "rake"
 gem "rake-compiler"
 gem "minitest"
-gem "torch-rb", path: "../torch-mainstream"
+gem "torch-rb", ">= 0.22.2"

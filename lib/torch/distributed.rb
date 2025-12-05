@@ -326,7 +326,7 @@ module Torch
           # best-effort error reporting back to parent
         ensure
           Process.exit!(1)
-          end
+        end
       end
 
       def fork_worker(reader, writer, rank, port, world_size, &block)
