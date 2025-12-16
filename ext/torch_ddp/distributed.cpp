@@ -8,10 +8,6 @@
 #include <vector>
 
 #include <torch/torch.h>
-#if defined(USE_C10D) && defined(USE_C10D_NCCL)
-#include <torch/cuda.h>
-#include <c10/cuda/CUDAFunctions.h>
-#endif
 
 #include <rice/rice.hpp>
 #include <rice/stl.hpp>
@@ -19,6 +15,13 @@
 static_assert(
     TORCH_VERSION_MAJOR == 2 && TORCH_VERSION_MINOR == 9,
     "Incompatible LibTorch version");
+
+#if defined(USE_C10D) && defined(USE_C10D_NCCL)
+extern "C" {
+int cudaGetDeviceCount(int* count);
+int cudaSetDevice(int device);
+}
+#endif
 
 #ifdef USE_C10D
 #include <torch/csrc/distributed/c10d/Backend.hpp>
@@ -99,6 +102,24 @@ int reduce_op_from_int(int code) {
   }
   return code;
 }
+
+#if defined(USE_C10D_NCCL)
+int cuda_device_count() {
+  int count = 0;
+  auto status = cudaGetDeviceCount(&count);
+  if (status != 0) {
+    rb_raise(rb_eRuntimeError, "cudaGetDeviceCount failed with code %d", status);
+  }
+  return count;
+}
+
+void ensure_cuda_device_set(int device_id) {
+  auto status = cudaSetDevice(device_id);
+  if (status != 0) {
+    rb_raise(rb_eRuntimeError, "cudaSetDevice(%d) failed with code %d", device_id, status);
+  }
+}
+#endif
 
 #endif
 
@@ -212,18 +233,18 @@ void init_distributed(Rice::Module& m) {
 
         if (device_id >= 0 && backend_lower == "nccl") {
 #if defined(USE_C10D_NCCL)
-          if (!torch::cuda::is_available()) {
+          auto device_count = cuda_device_count();
+          if (device_count <= 0) {
             rb_raise(rb_eRuntimeError, "CUDA is not available for NCCL backend");
           }
-          auto device_count = torch::cuda::device_count();
-          if (device_id >= static_cast<int>(device_count)) {
+          if (device_id >= device_count) {
             rb_raise(
                 rb_eArgError,
                 "Invalid device_id %d for NCCL backend (available devices: %d)",
                 device_id,
-                static_cast<int>(device_count));
+                device_count);
           }
-          c10::cuda::set_device(device_id);
+          ensure_cuda_device_set(device_id);
           pg->setBoundDeviceId(c10::Device(c10::kCUDA, device_id));
 #endif
         }

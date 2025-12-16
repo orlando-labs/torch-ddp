@@ -15,7 +15,7 @@ bundle config build.torch-ddp --with-torch-dir=/path/to/libtorch --with-gloo-inc
 If your CUDA or Gloo headers aren't in standard locations, extend the build config:
 
 ```sh
-bundle config build.torch-ddp --with-torch-dir=/path/to/libtorch --with-cuda-include=/path/to/cuda/include --with-gloo-include=/path/to/gloo/repo
+bundle config build.torch-ddp --with-torch-dir=/path/to/libtorch --with-gloo-include=/path/to/gloo/repo
 ```
 
 Add the gem next to `torch-rb`:

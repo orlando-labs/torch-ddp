@@ -61,20 +61,6 @@ $INCFLAGS += " -I#{inc}/torch/csrc/api/include"
 CONFIG["CC"] = CONFIG["CXX"]
 $CFLAGS = $CXXFLAGS
 
-supports_c10_cuda = with_cuda && try_compile(<<~CPP)
-  #include <torch/torch.h>
-  #include <c10/cuda/CUDAFunctions.h>
-
-  int main() {
-    c10::cuda::set_device(0);
-    return 0;
-  }
-CPP
-
-if supports_c10_cuda
-  $defs << " -DHAVE_C10_CUDA"
-end
-
 $LDFLAGS += " -Wl,-rpath,#{lib}"
 if RbConfig::CONFIG["host_os"] =~ /darwin/i && RbConfig::CONFIG["host_cpu"] =~ /arm|aarch64/i && Dir.exist?("/opt/homebrew/opt/libomp/lib")
   $LDFLAGS += ",-rpath,/opt/homebrew/opt/libomp/lib"
@@ -128,7 +114,7 @@ supports_c10d_gloo = supports_c10d && try_link(<<~CPP, "-DUSE_C10D -DUSE_C10D_GL
   }
 CPP
 
-supports_c10d_nccl = with_cuda && supports_c10_cuda && try_link(<<~CPP, "-DUSE_C10D -DUSE_C10D_NCCL")
+supports_c10d_nccl = with_cuda && try_link(<<~CPP, "-DUSE_C10D -DUSE_C10D_NCCL")
   #include <torch/torch.h>
   #include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
 
@@ -143,12 +129,11 @@ if supports_c10d_gloo
   $defs << "-DUSE_C10D_GLOO"
   puts "GLOO support detected"
 end
-unless supports_c10_cuda
-  puts "No c10 CUDA headers found. NCCL is unavailable"
-end
 if supports_c10d_nccl
   $defs << "-DUSE_C10D_NCCL"
   puts "NCCL support detected"
+elsif with_cuda
+  puts "NCCL support not detected; CUDA libraries found but headers may be unavailable"
 end
 
 # create makefile
