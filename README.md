@@ -6,10 +6,10 @@ Note: This gem has only seen testing across a narrow set of multi-GPU setups (li
 
 ## Installation
 
-Build LibTorch with distributed backends (Gloo for CPU, NCCL for CUDA). Point the extension at your LibTorch, CUDA, and optional Gloo includes:
+Build or download LibTorch with support of distributed backends (Gloo for CPU, NCCL for CUDA). Point the extension at your LibTorch, CUDA, and optional Gloo includes:
 
 ```sh
-bundle config build.torch-ddp --with-torch-dir=/path/to/libtorch --with-gloo-include=/path/to/gloo
+bundle config build.torch-ddp --with-torch-dir=/path/to/libtorch --with-cuda-dir=/path/to/cuda --with-gloo-include=/path/to/gloo
 ```
 
 Add the gem next to `torch-rb`:
