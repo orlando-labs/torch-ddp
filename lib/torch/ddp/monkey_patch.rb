@@ -100,8 +100,10 @@ module Torch
 
         def patch_device_helpers
           Torch::Device.class_eval do
+            alias_method :_torch_ddp_original_to_s, :to_s unless method_defined?(:_torch_ddp_original_to_s)
+
             define_method(:to_s) do
-              respond_to?(:_str) ? _str : super()
+              respond_to?(:_str) ? _str : _torch_ddp_original_to_s
             end
           end
 
