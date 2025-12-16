@@ -12,12 +12,6 @@ Build LibTorch with distributed backends (Gloo for CPU, NCCL for CUDA). Point th
 bundle config build.torch-ddp --with-torch-dir=/path/to/libtorch --with-gloo-include=/path/to/gloo
 ```
 
-If your CUDA or Gloo headers aren't in standard locations, extend the build config:
-
-```sh
-bundle config build.torch-ddp --with-torch-dir=/path/to/libtorch --with-gloo-include=/path/to/gloo/repo
-```
-
 Add the gem next to `torch-rb`:
 
 ```ruby
