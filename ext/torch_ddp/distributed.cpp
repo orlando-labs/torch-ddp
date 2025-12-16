@@ -12,16 +12,13 @@
 #include <rice/rice.hpp>
 #include <rice/stl.hpp>
 
+#if defined(USE_C10D) && defined(USE_C10D_NCCL)
+#include <cuda_runtime_api.h>
+#endif
+
 static_assert(
     TORCH_VERSION_MAJOR == 2 && TORCH_VERSION_MINOR == 9,
     "Incompatible LibTorch version");
-
-#if defined(USE_C10D) && defined(USE_C10D_NCCL)
-extern "C" {
-int cudaGetDeviceCount(int* count);
-int cudaSetDevice(int device);
-}
-#endif
 
 #ifdef USE_C10D
 #include <torch/csrc/distributed/c10d/Backend.hpp>

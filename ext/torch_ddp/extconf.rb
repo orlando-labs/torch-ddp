@@ -34,9 +34,11 @@ end
 
 cuda_inc, cuda_lib = dir_config("cuda")
 cuda_lib ||= "/usr/local/cuda/lib64"
+cuda_inc ||= "/usr/include"
 
 cudnn_inc, cudnn_lib = dir_config("cudnn")
 cudnn_lib ||= "/usr/local/cuda/lib"
+abort "cuda.h not found" unless find_header("cuda.h")
 
 gloo_inc, _ = dir_config("gloo")
 gloo_inc ||= "./vendor/gloo"
@@ -134,6 +136,10 @@ if supports_c10d_nccl
   puts "NCCL support detected"
 elsif with_cuda
   puts "NCCL support not detected; CUDA libraries found but headers may be unavailable"
+end
+
+unless supports_c10d_gloo || supports_c10d_nccl
+  abort "Neither Gloo nor NCCL support detected. Ensure LibTorch is built with distributed backends and provide Gloo or NCCL headers."
 end
 
 # create makefile
