@@ -100,7 +100,9 @@ module Torch
 
         def patch_device_helpers
           Torch::Device.class_eval do
-            define_method(:to_s) { _str }
+            define_method(:to_s) do
+              respond_to?(:_str) ? _str : super()
+            end
           end
 
           unless Torch.const_defined?(:DeviceString)
@@ -121,7 +123,13 @@ module Torch
                         Torch::Device.new(device.to_s)
                       end
                     end
-                  super(@device._str)
+                  device_str =
+                    if @device.respond_to?(:_str)
+                      @device._str
+                    else
+                      @device.to_s
+                    end
+                  super(device_str)
                 end
 
                 def type
