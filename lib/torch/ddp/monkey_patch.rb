@@ -108,8 +108,20 @@ module Torch
               :DeviceString,
               Class.new(String) do
                 def initialize(device)
-                  @device = device
-                  super(device._str)
+                  @device =
+                    case device
+                    when Torch::Device
+                      device
+                    when String, Symbol
+                      Torch::Device.new(device.to_s)
+                    else
+                      if device.respond_to?(:_str) && device.respond_to?(:type)
+                        device
+                      else
+                        Torch::Device.new(device.to_s)
+                      end
+                    end
+                  super(@device._str)
                 end
 
                 def type
@@ -124,7 +136,18 @@ module Torch
           end
 
           Torch::Tensor.class_eval do
-            define_method(:device) { Torch::DeviceString.new(_device) }
+            alias_method :_torch_ddp_original_device, :device unless method_defined?(:_torch_ddp_original_device)
+
+            define_method(:device) do
+              device_obj =
+                if respond_to?(:_device)
+                  _device
+                else
+                  _torch_ddp_original_device
+                end
+
+              Torch::DeviceString.new(device_obj)
+            end
           end
         end
 
