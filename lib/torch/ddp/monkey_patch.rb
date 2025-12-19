@@ -14,6 +14,7 @@ module Torch
 
           warn("#{WARNING_PREFIX} Applying torch compatibility patch for: #{missing.join(', ')}. Please upgrade the torch gem for native support.")
           patch_cuda_set_device if missing.include?(:cuda_set_device)
+          patch_cuda_empty_cache if missing.include?(:cuda_empty_cache)
           patch_device_helpers
           patch_load if missing.include?(:load_keywords)
           patch_tensor_item if missing.include?(:tensor_item_scalar)
@@ -25,6 +26,7 @@ module Torch
         def missing_features
           missing = []
           missing << :cuda_set_device unless Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:set_device)
+          missing << :cuda_empty_cache unless Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:empty_cache)
           missing << :load_keywords unless load_supports_map_location_and_weights_only?
           missing << :tensor_item_scalar unless tensor_item_returns_scalar?
           missing
@@ -93,6 +95,75 @@ module Torch
             else
               ->(device_id) do
                 raise Torch::Error, "Torch::CUDA.set_device is unavailable; ensure torch is built with CUDA or upgrade torch."
+              end
+            end
+          end
+        end
+
+        def patch_cuda_empty_cache
+          return unless Torch.const_defined?(:CUDA)
+
+          Torch::CUDA.singleton_class.class_eval do
+            define_method(:empty_cache) do
+              Torch::DDP::MonkeyPatch.cuda_empty_cache!
+            end
+          end
+        end
+
+        def cuda_empty_cache!
+          cuda_empty_cache_proc.call
+        end
+        public :cuda_empty_cache!
+
+        def cuda_empty_cache_proc
+          @cuda_empty_cache_proc ||= begin
+            function = nil
+
+            candidates = [
+              ENV["LIBTORCH_CUDA_PATH"],
+              "/usr/local/lib/libtorch_cuda.so",
+              "/usr/local/lib/libtorch_cuda.dylib",
+              "/usr/local/lib64/libtorch_cuda.so",
+              "/usr/lib/libtorch_cuda.so",
+              "libtorch_cuda.so",
+              "libtorch_cuda.dylib"
+            ].compact
+
+            symbols = [
+              "_ZN3c103cuda20CUDACachingAllocator9emptyCacheEv",
+              "_ZN3c103cuda20CUDACachingAllocator10emptyCacheEv"
+            ]
+
+            candidates.each do |path|
+              begin
+                handle = Fiddle.dlopen(path)
+                symbols.each do |symbol|
+                  begin
+                    function = Fiddle::Function.new(handle[symbol], [], Fiddle::TYPE_VOID)
+                    break
+                  rescue Fiddle::DLError
+                    next
+                  end
+                end
+                break if function
+              rescue Fiddle::DLError
+                next
+              end
+            end
+
+            if function
+              -> do
+                function.call
+                nil
+              end
+            else
+              warned = false
+              -> do
+                unless warned
+                  warn("#{WARNING_PREFIX} Torch::CUDA.empty_cache is unavailable; ensure torch is built with CUDA or upgrade torch.")
+                  warned = true
+                end
+                nil
               end
             end
           end
