@@ -1,5 +1,3 @@
-require "fiddle"
-
 module Torch
   module DDP
     module MonkeyPatch
@@ -58,47 +56,13 @@ module Torch
         end
 
         def cuda_set_device!(device_id)
-          cuda_set_device_proc.call(Integer(device_id))
+          unless Torch.const_defined?(:DDP) && Torch::DDP.respond_to?(:_cuda_set_device)
+            raise Torch::Error, "Torch::CUDA.set_device is unavailable; ensure torch is built with CUDA or upgrade torch."
+          end
+
+          Torch::DDP._cuda_set_device(Integer(device_id))
         end
         public :cuda_set_device!
-
-        def cuda_set_device_proc
-          @cuda_set_device_proc ||= begin
-            candidates = [
-              ENV["LIBCUDART_PATH"],
-              "/usr/local/cuda/lib64/libcudart.so",
-              "/usr/local/cuda/lib/libcudart.so",
-              "/usr/local/cuda/lib/libcudart.dylib",
-              "libcudart.so.12",
-              "libcudart.so.11",
-              "libcudart.so",
-              "libcudart.dylib"
-            ].compact
-
-            function = nil
-            candidates.each do |path|
-              begin
-                handle = Fiddle.dlopen(path)
-                function = Fiddle::Function.new(handle["cudaSetDevice"], [Fiddle::TYPE_INT], Fiddle::TYPE_INT)
-                break
-              rescue Fiddle::DLError
-                next
-              end
-            end
-
-            if function
-              ->(device_id) do
-                result = function.call(device_id)
-                raise Torch::Error, "cudaSetDevice(#{device_id}) failed with code #{result}" unless result.zero?
-                nil
-              end
-            else
-              ->(device_id) do
-                raise Torch::Error, "Torch::CUDA.set_device is unavailable; ensure torch is built with CUDA or upgrade torch."
-              end
-            end
-          end
-        end
 
         def patch_cuda_empty_cache
           return unless Torch.const_defined?(:CUDA)
@@ -111,63 +75,13 @@ module Torch
         end
 
         def cuda_empty_cache!
-          cuda_empty_cache_proc.call
+          unless Torch.const_defined?(:DDP) && Torch::DDP.respond_to?(:_cuda_empty_cache)
+            raise Torch::Error, "Torch::CUDA.empty_cache is unavailable; ensure torch is built with CUDA or upgrade torch."
+          end
+
+          Torch::DDP._cuda_empty_cache
         end
         public :cuda_empty_cache!
-
-        def cuda_empty_cache_proc
-          @cuda_empty_cache_proc ||= begin
-            function = nil
-
-            candidates = [
-              ENV["LIBTORCH_CUDA_PATH"],
-              "/usr/local/lib/libtorch_cuda.so",
-              "/usr/local/lib/libtorch_cuda.dylib",
-              "/usr/local/lib64/libtorch_cuda.so",
-              "/usr/lib/libtorch_cuda.so",
-              "libtorch_cuda.so",
-              "libtorch_cuda.dylib"
-            ].compact
-
-            symbols = [
-              "_ZN3c103cuda20CUDACachingAllocator9emptyCacheEv",
-              "_ZN3c103cuda20CUDACachingAllocator10emptyCacheEv"
-            ]
-
-            candidates.each do |path|
-              begin
-                handle = Fiddle.dlopen(path)
-                symbols.each do |symbol|
-                  begin
-                    function = Fiddle::Function.new(handle[symbol], [], Fiddle::TYPE_VOID)
-                    break
-                  rescue Fiddle::DLError
-                    next
-                  end
-                end
-                break if function
-              rescue Fiddle::DLError
-                next
-              end
-            end
-
-            if function
-              -> do
-                function.call
-                nil
-              end
-            else
-              warned = false
-              -> do
-                unless warned
-                  warn("#{WARNING_PREFIX} Torch::CUDA.empty_cache is unavailable; ensure torch is built with CUDA or upgrade torch.")
-                  warned = true
-                end
-                nil
-              end
-            end
-          end
-        end
 
         def patch_device_helpers
           Torch::Device.class_eval do
