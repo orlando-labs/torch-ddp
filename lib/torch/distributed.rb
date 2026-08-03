@@ -62,12 +62,10 @@ module Torch
 
         timeout_ms = (timeout * 1000).to_i
         bound_device_id = device_id.nil? ? -1 : Integer(device_id)
-        if backend == "nccl" && bound_device_id >= 0 && Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:set_device)
-          device_count = Torch::CUDA.device_count if Torch::CUDA.respond_to?(:device_count)
-          # Only attempt to switch devices when the requested id exists to avoid
-          # raising on hosts with fewer GPUs than the provided local rank.
-          Torch::CUDA.set_device(bound_device_id) if device_count.nil? || bound_device_id < device_count
-        end
+        # The native extension selects the NCCL device after creating the process group.
+        # Calling a Ruby compatibility cudaSetDevice before construction triggers a
+        # LibTorch 2.13/CUDA teardown double free.
+
         pg = _init_process_group(backend, store, rank, world_size, timeout_ms, bound_device_id)
         warmup_process_group(pg, backend)
       end

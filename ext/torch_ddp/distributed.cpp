@@ -54,22 +54,44 @@ struct StoreWrapper {
 
 struct ProcessGroupWrapper {
   ProcessGroupWrapper() = default;
-  explicit ProcessGroupWrapper(ProcessGroupPtr pg) : pg_(std::move(pg)) {}
+  explicit ProcessGroupWrapper(ProcessGroupPtr pg)
+      : pg_(std::move(pg)), preserve_on_destroy_(pg_ && pg_->getBackendName() == "nccl") {}
+
+  ~ProcessGroupWrapper() {
+    if (preserve_on_destroy_) {
+      pg_.release();
+    }
+  }
 
   ProcessGroupPtr pg_;
+  bool preserve_on_destroy_ = false;
 };
 
 ProcessGroupPtr default_process_group;
 std::once_flag default_pg_cleanup_once;
 
 void shutdown_default_process_group() {
-  if (default_process_group) {
+  if (!default_process_group) {
+    return;
+  }
+
+  auto process_group = std::move(default_process_group);
+  if (process_group->getBackendName() == "nccl") {
     try {
-      default_process_group->shutdown();
+      process_group->abort();
     } catch (...) {
-      // best effort; ensure reset still happens
+      // best effort; avoid throwing from Ruby/C++ exit handlers
     }
-    default_process_group.reset();
+    // LibTorch 2.13 may double-free NCCL resources from the intrusive_ptr
+    // destructor after abort; leave this final owning reference leaked.
+    process_group.release();
+    return;
+  }
+
+  try {
+    process_group->shutdown();
+  } catch (...) {
+    // best effort; the local intrusive_ptr still releases the Gloo group
   }
 }
 
