@@ -99,20 +99,18 @@ def subset_for_rank(dataset, rank, world_size)
 end
 
 def checkpoint_map_location(device, rank)
-  accelerator_type = device&.type
-  return nil unless accelerator_type && accelerator_type != "cpu"
+  device_type = device&.type
+  return nil unless device_type && device_type != "cpu"
   target_index = device.index
   if target_index.nil?
-    count = if Torch.const_defined?(:Accelerator) && Torch::Accelerator.respond_to?(:device_count)
-      Torch::Accelerator.device_count
-    elsif Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:device_count)
+    count = if Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:device_count)
       Torch::CUDA.device_count
     else
       0
     end
     target_index = count.positive? ? rank % count : 0
   end
-  { "#{accelerator_type}:0" => "#{accelerator_type}:#{target_index}" }
+  { "#{device_type}:0" => "#{device_type}:#{target_index}" }
 end
 
 def load_checkpoint_if_present(ddp, device, rank, path)

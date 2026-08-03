@@ -264,17 +264,17 @@ module Torch
         when Torch::Device
           device.type
         when NilClass
-          accelerator_type || "cpu"
+          device_type_fallback || "cpu"
         when String
           Torch.device(device).type
         when Integer
-          return accelerator_type || "cpu" if device.negative?
+          return device_type_fallback || "cpu" if device.negative?
           if Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:device_count)
             max = Torch::CUDA.device_count
-            return accelerator_type || "cpu" if max <= 0 || device >= max
+            return device_type_fallback || "cpu" if max <= 0 || device >= max
             return Torch.device("cuda:#{device}").type
           end
-          accelerator_type || "cpu"
+          device_type_fallback || "cpu"
         else
           return device.type if device.respond_to?(:type)
           Torch.device(device).type
@@ -283,12 +283,7 @@ module Torch
         raise ArgumentError, "Invalid device #{device.inspect}: #{e.message}"
       end
 
-      def accelerator_type
-        if Torch.const_defined?(:Accelerator) && Torch::Accelerator.respond_to?(:current_accelerator)
-          acc = Torch::Accelerator.current_accelerator
-          return acc.type if acc && acc.respond_to?(:type)
-        end
-
+      def device_type_fallback
         if Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:available?) && Torch::CUDA.available?
           return "cuda"
         end

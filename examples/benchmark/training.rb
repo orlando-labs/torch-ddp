@@ -349,7 +349,7 @@ results = []
 
 backends.each do |backend|
   unless backend_supported?(backend)
-    warn "Skipping backend=#{backend} because required accelerator support is unavailable."
+    warn "Skipping backend=#{backend} because required CUDA support is unavailable."
     next
   end
 
