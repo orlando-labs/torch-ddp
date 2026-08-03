@@ -1,6 +1,6 @@
 require "mkmf-rice"
 
-$CXXFLAGS += " -std=c++17 $(optflags)"
+$CXXFLAGS += " -std=c++20 $(optflags)"
 
 # change to 0 for Linux pre-cxx11 ABI version
 $CXXFLAGS += " -D_GLIBCXX_USE_CXX11_ABI=1"
@@ -38,7 +38,6 @@ cuda_inc ||= "/usr/include"
 
 cudnn_inc, cudnn_lib = dir_config("cudnn")
 cudnn_lib ||= "/usr/local/cuda/lib"
-abort "cuda.h not found" unless find_header("cuda.h")
 
 gloo_inc, _ = dir_config("gloo")
 gloo_inc ||= "./vendor/gloo"
@@ -56,13 +55,25 @@ if Dir["#{lib}/*torch_cuda*"].any?
   $LDFLAGS += " -L#{cudnn_lib}" if Dir.exist?(cudnn_lib) && cudnn_lib != cuda_lib
   with_cuda = have_library("cuda") && have_library("cudnn")
 end
+abort "cuda.h not found" if with_cuda && !find_header("cuda.h")
 $defs << "-DWITH_CUDA" if with_cuda
 
 $INCFLAGS += " -I#{inc}"
 $INCFLAGS += " -I#{inc}/torch/csrc/api/include"
 
 CONFIG["CC"] = CONFIG["CXX"]
+CONFIG["CXXFLAGS"] = $CXXFLAGS
+RbConfig::CONFIG["CXXFLAGS"] = $CXXFLAGS
 $CFLAGS = $CXXFLAGS
+$CFLAGS += " -std=c++20"
+
+def try_link_with_cppflags(source, flags)
+  original_cppflags = $CPPFLAGS
+  $CPPFLAGS = [original_cppflags, flags].compact.join(" ")
+  try_link(source)
+ensure
+  $CPPFLAGS = original_cppflags
+end
 
 $LDFLAGS += " -Wl,-rpath,#{lib}"
 if RbConfig::CONFIG["host_os"] =~ /darwin/i && RbConfig::CONFIG["host_cpu"] =~ /arm|aarch64/i && Dir.exist?("/opt/homebrew/opt/libomp/lib")
@@ -70,7 +81,7 @@ if RbConfig::CONFIG["host_os"] =~ /darwin/i && RbConfig::CONFIG["host_cpu"] =~ /
 end
 $LDFLAGS += ":#{cuda_lib}/stubs:#{cuda_lib}" if with_cuda
 
-# https://github.com/pytorch/pytorch/blob/v2.9.0/torch/utils/cpp_extension.py#L1351-L1364
+# https://github.com/pytorch/pytorch/blob/v2.13.0/torch/utils/cpp_extension.py#L1351-L1364
 $LDFLAGS += " -lc10 -ltorch_cpu -ltorch"
 if with_cuda
   $LDFLAGS += " -lcuda -lnvrtc"
@@ -80,7 +91,10 @@ if with_cuda
   $LDFLAGS += " -Wl,--no-as-needed,#{lib}/libtorch.so"
 end
 
-supports_c10d = try_link(<<~CPP, "-DUSE_C10D")
+supports_c10d = try_link_with_cppflags(<<~CPP, "-DUSE_C10D")
+  // Ruby's headers define `_` as a compatibility macro, which collides with
+  // LibTorch 2.13's TensorAccessor headers.
+  #undef _
   #include <torch/torch.h>
   #include <torch/csrc/distributed/c10d/FileStore.hpp>
 
@@ -103,7 +117,8 @@ else
   puts "Building without distributed support"
 end
 
-supports_c10d_gloo = supports_c10d && try_link(<<~CPP, "-DUSE_C10D -DUSE_C10D_GLOO")
+supports_c10d_gloo = supports_c10d && try_link_with_cppflags(<<~CPP, "-DUSE_C10D -DUSE_C10D_GLOO")
+  #undef _
   #include <torch/torch.h>
   #include <torch/csrc/distributed/c10d/ProcessGroupGloo.hpp>
   #include <torch/csrc/distributed/c10d/FileStore.hpp>
@@ -117,7 +132,8 @@ supports_c10d_gloo = supports_c10d && try_link(<<~CPP, "-DUSE_C10D -DUSE_C10D_GL
   }
 CPP
 
-supports_c10d_nccl = with_cuda && try_link(<<~CPP, "-DUSE_C10D -DUSE_C10D_NCCL")
+supports_c10d_nccl = with_cuda && try_link_with_cppflags(<<~CPP, "-DUSE_C10D -DUSE_C10D_NCCL")
+  #undef _
   #include <torch/torch.h>
   #include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
 

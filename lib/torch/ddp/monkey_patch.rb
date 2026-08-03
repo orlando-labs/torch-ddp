@@ -13,7 +13,7 @@ module Torch
           warn("#{WARNING_PREFIX} Applying torch compatibility patch for: #{missing.join(', ')}. Please upgrade the torch gem for native support.")
           patch_cuda_set_device if missing.include?(:cuda_set_device)
           patch_cuda_empty_cache if missing.include?(:cuda_empty_cache)
-          patch_device_helpers
+          patch_device_helpers if missing.include?(:device_helpers)
           patch_load if missing.include?(:load_keywords)
           patch_tensor_item if missing.include?(:tensor_item_scalar)
           @applied = true
@@ -25,9 +25,16 @@ module Torch
           missing = []
           missing << :cuda_set_device unless Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:set_device)
           missing << :cuda_empty_cache unless Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:empty_cache)
+          missing << :device_helpers unless native_device_helpers?
           missing << :load_keywords unless load_supports_map_location_and_weights_only?
           missing << :tensor_item_scalar unless tensor_item_returns_scalar?
           missing
+        end
+
+        def native_device_helpers?
+          Torch.tensor([0]).device.is_a?(Torch::Device)
+        rescue StandardError
+          false
         end
 
         def load_supports_map_location_and_weights_only?
