@@ -44,7 +44,7 @@ void register_cuda_helpers(Rice::Module& m) {
             rb_eRuntimeError,
             "Torch::DDP._cuda_set_device requires CUDA support");
 #endif
-        return Qnil;
+        return Rice::Object(Qnil);
       });
 
   rb_mDDP.define_singleton_function(
@@ -57,7 +57,7 @@ void register_cuda_helpers(Rice::Module& m) {
             rb_eRuntimeError,
             "Torch::DDP._cuda_empty_cache requires CUDA support");
 #endif
-        return Qnil;
+        return Rice::Object(Qnil);
       });
 }
 

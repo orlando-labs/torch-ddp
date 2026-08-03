@@ -254,7 +254,7 @@ void init_distributed(Rice::Module& m) {
       "_destroy_process_group",
       []() {
         shutdown_default_process_group();
-        return Qnil;
+        return Rice::Object(Qnil);
       });
 
   rb_mDistributed.define_singleton_function(
@@ -267,7 +267,7 @@ void init_distributed(Rice::Module& m) {
       "_default_process_group",
       [rb_cProcessGroup]() -> Rice::Object {
         if (!default_process_group) {
-          return Qnil;
+          return Rice::Object(Qnil);
         }
         return Rice::Data_Object<ProcessGroupWrapper>(new ProcessGroupWrapper(default_process_group), true, rb_cProcessGroup);
       });
@@ -293,7 +293,7 @@ void init_distributed(Rice::Module& m) {
         ::c10d::BarrierOptions opts;
         auto work = pg->barrier(opts);
         work->wait();
-        return Qnil;
+        return Rice::Object(Qnil);
       });
 
   rb_mDistributed.define_singleton_function(
