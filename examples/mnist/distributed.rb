@@ -17,7 +17,7 @@ DEFAULT_CHECKPOINT_PATH = File.join(Dir.tmpdir, "mnist_ddp_checkpoint.pt")
 DEFAULT_BACKEND = if Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:available?) && Torch::CUDA.available?
   "nccl"
 else
-  Torch::Distributed.get_default_backend_for_device(Torch::Accelerator.current_accelerator) || "gloo"
+  Torch::Distributed.get_default_backend_for_device(nil) || "gloo"
 end
 
 class MyNet < Torch::NN::Module
@@ -99,13 +99,17 @@ def subset_for_rank(dataset, rank, world_size)
 end
 
 def checkpoint_map_location(device, rank)
-  accelerator_device = Torch::Accelerator.current_accelerator
-  return nil unless accelerator_device
-
-  accelerator_type = accelerator_device.type
+  accelerator_type = device&.type
+  return nil unless accelerator_type && accelerator_type != "cpu"
   target_index = device.index
-  if target_index.nil? && Torch::Accelerator.respond_to?(:device_count)
-    count = Torch::Accelerator.device_count
+  if target_index.nil?
+    count = if Torch.const_defined?(:Accelerator) && Torch::Accelerator.respond_to?(:device_count)
+      Torch::Accelerator.device_count
+    elsif Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:device_count)
+      Torch::CUDA.device_count
+    else
+      0
+    end
     target_index = count.positive? ? rank % count : 0
   end
   { "#{accelerator_type}:0" => "#{accelerator_type}:#{target_index}" }
@@ -173,8 +177,7 @@ end
 
 def run_worker(rank, world_size, port, options)
   store = Torch::Distributed::TCPStore.new("127.0.0.1", port, world_size, rank.zero?)
-  accelerator = Torch::Accelerator.current_accelerator
-  backend = options[:backend] || Torch::Distributed.get_default_backend_for_device(accelerator) || DEFAULT_BACKEND
+  backend = options[:backend] || Torch::Distributed.get_default_backend_for_device(nil) || DEFAULT_BACKEND
   Torch::Distributed.init_process_group(backend, store: store, rank: rank, world_size: world_size)
 
   device = if Torch::CUDA.available? && options[:gpus] > 0

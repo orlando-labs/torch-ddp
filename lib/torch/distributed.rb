@@ -284,8 +284,21 @@ module Torch
       end
 
       def accelerator_type
-        acc = Torch::Accelerator.current_accelerator
-        acc.type if acc && acc.respond_to?(:type)
+        if Torch.const_defined?(:Accelerator) && Torch::Accelerator.respond_to?(:current_accelerator)
+          acc = Torch::Accelerator.current_accelerator
+          return acc.type if acc && acc.respond_to?(:type)
+        end
+
+        if Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:available?) && Torch::CUDA.available?
+          return "cuda"
+        end
+
+        if Torch.const_defined?(:Backends) && Torch::Backends.const_defined?(:MPS) &&
+            Torch::Backends::MPS.respond_to?(:available?) && Torch::Backends::MPS.available?
+          return "mps"
+        end
+
+        "cpu"
       rescue
         nil
       end

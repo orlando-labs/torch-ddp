@@ -13,7 +13,7 @@ require "torchvision"
 DEFAULT_BACKEND = if Torch.const_defined?(:CUDA) && Torch::CUDA.respond_to?(:available?) && Torch::CUDA.available?
   "nccl"
 else
-  Torch::Distributed.get_default_backend_for_device(Torch::Accelerator.current_accelerator) || "gloo"
+  Torch::Distributed.get_default_backend_for_device(nil) || "gloo"
 end
 SPAWN_BACKEND_ENV = "TORCH_RB_BENCH_BACKEND".freeze
 SPAWN_GROUP_ENV = "TORCH_RB_BENCH_GROUP_SIZE".freeze
@@ -181,8 +181,7 @@ def benchmark_worker(rank, world_size, port, options)
   raise ArgumentError, "Unsupported architecture #{arch.inspect}" unless config
 
   distributed = world_size > 1
-  accelerator = Torch::Accelerator.current_accelerator
-  selected_backend = options[:backend] || Torch::Distributed.get_default_backend_for_device(accelerator) || DEFAULT_BACKEND
+  selected_backend = options[:backend] || Torch::Distributed.get_default_backend_for_device(nil) || DEFAULT_BACKEND
   if distributed
     store = Torch::Distributed::TCPStore.new("127.0.0.1", port, world_size, rank.zero?)
     Torch::Distributed.init_process_group(selected_backend, store: store, rank: rank, world_size: world_size)
